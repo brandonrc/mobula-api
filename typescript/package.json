@@ -1,0 +1,21 @@
+{
+  "name": "@brandonrc/mobula-client",
+  "version": "0.0.0",
+  "description": "Generated TypeScript client for the Mobula control-plane API. Do not edit by hand — generated from openapi.json by the mobula-api pipeline.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
+    "./openapi.json": "./openapi.json"
+  },
+  "files": ["dist", "openapi.json"],
+  "repository": { "type": "git", "url": "https://github.com/brandonrc/mobula-api.git", "directory": "typescript" },
+  "publishConfig": { "registry": "https://npm.pkg.github.com" },
+  "scripts": {
+    "generate": "openapi-typescript ../openapi.json -o src/schema.d.ts",
+    "build": "npm run generate && tsc"
+  },
+  "dependencies": { "openapi-fetch": "^0.13.0" },
+  "devDependencies": { "openapi-typescript": "^7.7.0", "typescript": "~5.8.3" }
+}

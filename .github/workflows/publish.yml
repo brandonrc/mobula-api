@@ -1,0 +1,44 @@
+name: Publish client
+
+# Regenerates @brandonrc/mobula-client from openapi.json and publishes it to
+# the GitHub Packages npm registry. Runs whenever the spec (pushed here by
+# mobula's CI) or the generator changes, and on demand. Dev versioning:
+# 0.0.<run_number>, published as `latest`.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "openapi.json"
+      - "typescript/**"
+      - ".github/workflows/publish.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: typescript
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://npm.pkg.github.com"
+          scope: "@brandonrc"
+      - name: Version = 0.0.<run_number> (dev)
+        run: npm version "0.0.${GITHUB_RUN_NUMBER}" --no-git-tag-version --allow-same-version
+      - name: Install, generate from openapi.json, build
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+      - name: Publish
+        run: |
+          cp ../openapi.json ./openapi.json
+          npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

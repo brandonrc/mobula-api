@@ -1,4 +1,4 @@
-name: Publish client
+name: Generate & publish SDK
 
 # Regenerates @brandonrc/mobula-client from openapi.json and publishes it to
 # the GitHub Packages npm registry. Runs whenever the spec (pushed here by
@@ -9,8 +9,8 @@ on:
     branches: [main]
     paths:
       - "openapi.json"
-      - "typescript/**"
-      - ".github/workflows/publish.yml"
+      - "sdk/typescript/**"
+      - ".github/workflows/generate.yml"
   workflow_dispatch:
 
 permissions:
@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: typescript
+        working-directory: sdk/typescript
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -38,7 +38,7 @@ jobs:
           npm run build
       - name: Publish
         run: |
-          cp ../openapi.json ./openapi.json
+          cp ../../openapi.json ./openapi.json
           npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

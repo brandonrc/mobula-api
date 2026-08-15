@@ -30,8 +30,8 @@ jobs:
           node-version: "22"
           registry-url: "https://npm.pkg.github.com"
           scope: "@brandonrc"
-      - name: Version = 0.0.<run_number> (dev)
-        run: npm version "0.0.${GITHUB_RUN_NUMBER}" --no-git-tag-version --allow-same-version
+      - name: Version = 0.1.<run_number> (dev; 0.1.x avoids the retired 0.0.1)
+        run: npm version "0.1.${GITHUB_RUN_NUMBER}" --no-git-tag-version --allow-same-version
       - name: Install, generate from openapi.json, build
         run: |
           npm install --no-audit --no-fund

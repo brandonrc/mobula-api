@@ -1,0 +1,7 @@
+# openapi-generator config for the Python SDK.
+generatorName: python
+additionalProperties:
+  packageName: "mobula_client"
+  projectName: "mobula-client"
+  packageVersion: "0.1.0"
+  library: urllib3

@@ -16,8 +16,15 @@ openapi.yaml         # same spec, YAML — for tools that prefer it
 .spectral.yaml       # Spectral lint ruleset
 redocly.yaml         # Redocly lint/docs config
 sdk/
-  typescript/        # @brandonrc/mobula-client — published to GitHub Packages
+  typescript/        # config.yaml + templates/  (openapi-generator: typescript-fetch)
+  rust/              # config.yaml + templates/  (openapi-generator: rust/reqwest)
+  python/            # config.yaml + templates/  (openapi-generator: python)
 ```
+
+Each `sdk/<lang>/` is **config-only**: openapi-generator emits the whole
+package (including package.json/Cargo.toml/pyproject) from `config.yaml`;
+drop `.mustache` files in `templates/` to override specific generated files.
+Nothing generated is committed.
 
 More SDK languages slot in under `sdk/<lang>/` (the pattern this mirrors,
 [artifact-keeper-api](https://github.com/artifact-keeper/artifact-keeper-api),
@@ -38,8 +45,9 @@ mobula-api (this repo)  ──validate──▶  ──generate──▶  @brand
 
 ## Notes
 
-- TypeScript SDK: `openapi-typescript` types + an `openapi-fetch` client
-  (`createMobulaClient`). artifact-keeper-api uses `@hey-api/openapi-ts`; we
-  can switch to match exactly if we want fuller service methods.
+- Generation: **openapi-generator** (Mustache templates), one config per
+  language under `sdk/<lang>/`. TS publishes to GitHub Packages now; Rust and
+  Python build in CI and publish only when `CARGO_REGISTRY_TOKEN` /
+  `PYPI_API_TOKEN` secrets are set.
 - Versioning is loose during dev: the SDK publishes `0.1.<run>` and consumers
   track `latest`. Aligning the SDK version to a real API version is later work.

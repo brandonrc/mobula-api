@@ -9,6 +9,201 @@
     "version": "0.0.1"
   },
   "paths": {
+    "/api/v1/audit": {
+      "get": {
+        "tags": [
+          "audit"
+        ],
+        "summary": "List the persisted audit trail, Admin-only (api-v1.md §5.9).",
+        "operationId": "list_audit_events",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Page size (default 100, max 1000).",
+            "required": false,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Only rows with `seq` strictly before this value (from a previous\nresponse's `next_cursor`).",
+            "required": false,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "description": "Window start, unix seconds (inclusive).",
+            "required": false,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "description": "Window end, unix seconds (inclusive).",
+            "required": false,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "subject",
+            "in": "query",
+            "description": "Exact subject match.",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "cluster",
+            "in": "query",
+            "description": "Exact cluster id match.",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "method",
+            "in": "query",
+            "description": "Exact HTTP method match (e.g. `POST`).",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "path_prefix",
+            "in": "query",
+            "description": "Rows whose path starts with this prefix.",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "min_status",
+            "in": "query",
+            "description": "Only rows with `status` >= this (status-less rows excluded).",
+            "required": false,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "decision",
+            "in": "query",
+            "description": "`allow` or `deny`.",
+            "required": false,
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "$ref": "#/components/schemas/AuditDecision"
+                }
+              ]
+            }
+          },
+          {
+            "name": "reason",
+            "in": "query",
+            "description": "Exact reason match (e.g. `insufficient_permission`).",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "description": "`csv` exports the page as `text/csv`; anything else is a 400.",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Audit events, newest first. `?format=csv` returns text/csv instead.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad query (e.g. from > to, unknown format)"
+          },
+          "401": {
+            "description": "No/invalid token"
+          },
+          "403": {
+            "description": "Admin only — audit subjects are Admin data"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/clusters": {
       "get": {
         "tags": [
@@ -942,6 +1137,153 @@
           }
         }
       },
+      "AuditDecision": {
+        "type": "string",
+        "description": "Whether Mobula allowed or refused the thing the event describes.\nSerialized snake_case (`allow` / `deny`).",
+        "enum": [
+          "allow",
+          "deny"
+        ]
+      },
+      "AuditEvent": {
+        "type": "object",
+        "description": "One audit-trail row (api-v1.md §5.9). Fields not applicable to the\nemitting site are `None` (serialized `null`); `granted_roles` is empty.\n\nDecision policy (mobula-api `audit` module): `deny` rows are emitted at\nthe point of refusal (authn failures, authz denials, quota denials);\ngateway per-request rows are always `allow` — a request Mobula refuses\nnever reaches the gateway, so its `deny` row comes from the refuser.",
+        "required": [
+          "ts",
+          "decision"
+        ],
+        "properties": {
+          "action": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Control-plane mutation (`create_cluster`, `delete_pool`, …);\n`null` on gateway rows."
+          },
+          "cluster": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Cluster id the event concerns; `null` when not cluster-scoped."
+          },
+          "decision": {
+            "$ref": "#/components/schemas/AuditDecision"
+          },
+          "granted_roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Roles the caller held (snake_case); authz denials only, else `[]`."
+          },
+          "latency_ms": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Gateway upstream round-trip; `null` elsewhere.",
+            "minimum": 0
+          },
+          "method": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "HTTP method, for gateway and authn/ext_authz rows."
+          },
+          "path": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Request path (no query string)."
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Machine-readable refusal reason (`missing_token`, `invalid_token`,\n`insufficient_permission`, `quota_exceeded`); `null` on allows."
+          },
+          "required": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AuditRequired",
+                "description": "The permission an authz denial was checked against."
+              }
+            ]
+          },
+          "status": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "HTTP status of the outcome, when one is known.",
+            "minimum": 0
+          },
+          "subject": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Authenticated subject; `null` for authn failures (no identity yet)."
+          },
+          "ts": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Unix seconds.",
+            "minimum": 0
+          }
+        }
+      },
+      "AuditListResponse": {
+        "type": "object",
+        "description": "Response of `GET /api/v1/audit`. This endpoint is the ONE list route\nthat wraps its items in an envelope — the cursor has to live somewhere\n(api-v1.md §5.9).",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AuditEvent"
+            }
+          },
+          "next_cursor": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Pass as `cursor` for the next (older) page; `null` at the end.",
+            "minimum": 0
+          }
+        }
+      },
+      "AuditRequired": {
+        "type": "object",
+        "description": "The (verb, target) permission an authorization decision was checked\nagainst — mirrors `mobula_auth::{PermissionType, Target}` as lowercase\nstrings (`\"write\"`, `\"cluster\"`) so core stays free of auth types.\nPresent only on authz denials.",
+        "required": [
+          "action",
+          "target"
+        ],
+        "properties": {
+          "action": {
+            "type": "string",
+            "description": "e.g. \"read\" | \"write\" | \"delete\" | \"admin\"."
+          },
+          "target": {
+            "type": "string",
+            "description": "e.g. \"job\" | \"cluster\" | \"service\" | \"pool\"."
+          }
+        }
+      },
       "ClusterSpec": {
         "type": "object",
         "description": "Declarative spec for a managed Ray cluster.\n\nv0 targets the KubeRay backend only; fields deliberately mirror what maps\nonto a RayCluster CR so the provisioner stays a thin translation.",
@@ -1743,6 +2085,10 @@
     {
       "name": "registry",
       "description": "The job gateway's routing table (ADR-0002). Admin-only: it is the credential-routing table. Static config today; dynamic registration of managed clusters is a follow-up."
+    },
+    {
+      "name": "audit",
+      "description": "The persisted audit trail (api-v1.md §5.9): every authn/authz decision, mutation, and proxied gateway request, newest-first with seq-cursor pagination and CSV export. Admin-only — audit subjects are Admin data. Mounted only when a store is configured."
     }
   ]
 }

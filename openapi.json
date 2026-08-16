@@ -204,6 +204,191 @@
         ]
       }
     },
+    "/api/v1/auth/login": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Username/password login (ADR-0011). Public (allowlisted); rate-limited\nby bcrypt cost and the 5-strikes/5-minute account lockout.",
+        "operationId": "login",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Logged in; opaque bearer token returned",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid credentials (identical body for unknown user, wrong password, locked, or disabled)"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Log out: if the caller authenticated with a PAT, revoke it; otherwise a\n204 no-op (JWTs are stateless — there is nothing server-side to kill).",
+        "operationId": "logout",
+        "responses": {
+          "204": {
+            "description": "Logged out (PAT revoked when one was used)"
+          },
+          "401": {
+            "description": "No/invalid token"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/auth/providers": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Login-page metadata: which providers are configured. Public by design.",
+        "operationId": "providers",
+        "responses": {
+          "200": {
+            "description": "Configured auth providers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProvidersResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/tokens": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "List the caller's own tokens. Hashes are never serialized.",
+        "operationId": "list_tokens",
+        "responses": {
+          "200": {
+            "description": "The caller's tokens, newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ApiTokenView"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No/invalid token"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Mint a personal access token for the caller (ADR-0011). Any\nauthenticated identity; the plaintext is shown once.",
+        "operationId": "create_token",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Token created; plaintext returned once",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateTokenResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "expires_in_days out of range"
+          },
+          "401": {
+            "description": "No/invalid token"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/auth/tokens/{prefix}": {
+      "delete": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Revoke one of the caller's own tokens. Someone else's token (or a\nnonexistent prefix) is a 404 — ownership can't be probed.",
+        "operationId": "revoke_token",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "The token's 8-char lookup prefix",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Revoked"
+          },
+          "401": {
+            "description": "No/invalid token"
+          },
+          "404": {
+            "description": "No such token for this caller"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/clusters": {
       "get": {
         "tags": [
@@ -1137,6 +1322,50 @@
           }
         }
       },
+      "ApiTokenView": {
+        "type": "object",
+        "description": "The public projection of an API token — no hash, no plaintext.",
+        "required": [
+          "prefix",
+          "username",
+          "label",
+          "created_at",
+          "expires_at",
+          "revoked"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "expires_at": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "label": {
+            "type": "string"
+          },
+          "last_used_at": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "minimum": 0
+          },
+          "prefix": {
+            "type": "string"
+          },
+          "revoked": {
+            "type": "boolean"
+          },
+          "username": {
+            "type": "string"
+          }
+        }
+      },
       "AuditDecision": {
         "type": "string",
         "description": "Whether Mobula allowed or refused the thing the event describes.\nSerialized snake_case (`allow` / `deny`).",
@@ -1444,6 +1673,48 @@
           }
         }
       },
+      "CreateTokenRequest": {
+        "type": "object",
+        "required": [
+          "label",
+          "expires_in_days"
+        ],
+        "properties": {
+          "expires_in_days": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Lifetime in days; capped at the server maximum (90).",
+            "minimum": 0
+          },
+          "label": {
+            "type": "string",
+            "description": "Human label (\"ci\", \"laptop\") — shown in listings."
+          }
+        }
+      },
+      "CreateTokenResponse": {
+        "type": "object",
+        "description": "`POST /api/v1/auth/tokens` success body. The plaintext `token` is\nreturned ONLY here — store it now; it cannot be recovered.",
+        "required": [
+          "prefix",
+          "token",
+          "expires_at"
+        ],
+        "properties": {
+          "expires_at": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Unix seconds.",
+            "minimum": 0
+          },
+          "prefix": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string"
+          }
+        }
+      },
       "DeployService": {
         "type": "object",
         "description": "Request body to deploy or update a service.",
@@ -1537,6 +1808,90 @@
             "minimum": 0
           },
           "submitter": {
+            "type": "string"
+          }
+        }
+      },
+      "LocalRole": {
+        "type": "string",
+        "description": "A local user's role (ADR-0011: roles are a column on the user, resolved\nper request — no claim staleness). Stored as TEXT in `local_users.role`;\nthe vocabulary mirrors `mobula_auth::Role` (kept as a separate enum so\ncore never depends on the auth crate).",
+        "enum": [
+          "viewer",
+          "developer",
+          "operator",
+          "admin"
+        ]
+      },
+      "LoginIdentity": {
+        "type": "object",
+        "description": "The identity half of a login response.",
+        "required": [
+          "subject",
+          "roles"
+        ],
+        "properties": {
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "subject": {
+            "type": "string"
+          }
+        }
+      },
+      "LoginRequest": {
+        "type": "object",
+        "required": [
+          "username",
+          "password"
+        ],
+        "properties": {
+          "password": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          }
+        }
+      },
+      "LoginResponse": {
+        "type": "object",
+        "description": "`POST /api/v1/auth/login` success body. `token` is an opaque\n`mob_…` bearer credential (ADR-0011: stored, never signed).",
+        "required": [
+          "token",
+          "token_type",
+          "expires_at",
+          "identity"
+        ],
+        "properties": {
+          "expires_at": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Unix seconds after which the token no longer authenticates.",
+            "minimum": 0
+          },
+          "identity": {
+            "$ref": "#/components/schemas/LoginIdentity"
+          },
+          "token": {
+            "type": "string"
+          },
+          "token_type": {
+            "type": "string",
+            "description": "Always \"bearer\".",
+            "example": "bearer"
+          }
+        }
+      },
+      "OidcProviderInfo": {
+        "type": "object",
+        "required": [
+          "issuer"
+        ],
+        "properties": {
+          "issuer": {
             "type": "string"
           }
         }
@@ -1678,6 +2033,30 @@
             "propertyNames": {
               "type": "string"
             }
+          }
+        }
+      },
+      "ProvidersResponse": {
+        "type": "object",
+        "description": "Which auth providers this deployment offers (login-page metadata; not\nsensitive — the endpoint is public by design).",
+        "required": [
+          "local"
+        ],
+        "properties": {
+          "local": {
+            "type": "boolean",
+            "description": "Local username/password auth is enabled (ADR-0011)."
+          },
+          "oidc": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/OidcProviderInfo",
+                "description": "OIDC configuration, when a validator is configured."
+              }
+            ]
           }
         }
       },
@@ -2089,6 +2468,10 @@
     {
       "name": "audit",
       "description": "The persisted audit trail (api-v1.md §5.9): every authn/authz decision, mutation, and proxied gateway request, newest-first with seq-cursor pagination and CSV export. Admin-only — audit subjects are Admin data. Mounted only when a store is configured."
+    },
+    {
+      "name": "auth",
+      "description": "Local auth (ADR-0011): username/password login issuing opaque (unsigned) bearer tokens, personal access token management, and provider metadata. `login` and `providers` are public; token routes are owner-scoped. Mounted only with `serve --local-auth` (except `providers`)."
     }
   ]
 }

@@ -165,6 +165,40 @@
         ]
       }
     },
+    "/api/v1/jobs": {
+      "get": {
+        "tags": [
+          "jobs"
+        ],
+        "operationId": "list_jobs",
+        "responses": {
+          "200": {
+            "description": "Persistent job history, newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/JobView"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No/invalid token"
+          },
+          "403": {
+            "description": "Missing Read on job"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/services": {
       "get": {
         "tags": [
@@ -519,6 +553,46 @@
           },
           "spec": {
             "$ref": "#/components/schemas/ServiceSpec"
+          }
+        }
+      },
+      "JobView": {
+        "type": "object",
+        "description": "A job in the persistent, cross-cluster history (Phase 3, spec §5.5).",
+        "required": [
+          "id",
+          "cluster",
+          "submitter",
+          "status",
+          "submitted_at"
+        ],
+        "properties": {
+          "cluster": {
+            "type": "string"
+          },
+          "duration_secs": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Wall-clock seconds once terminal; null while running.",
+            "minimum": 0
+          },
+          "id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "description": "Ray job status (PENDING | RUNNING | SUCCEEDED | FAILED | STOPPED)."
+          },
+          "submitted_at": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "submitter": {
+            "type": "string"
           }
         }
       },

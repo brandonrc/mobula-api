@@ -432,6 +432,13 @@
           "ray_version"
         ],
         "properties": {
+          "condition": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Drift/health alarm raised by the reconcile engine (ADR-0004, #41/#47):\n\"spec_drift\" (out-of-band edit) or \"degraded\". `None` when converging\nnormally. Distinct from `observed_state`."
+          },
           "desired": {
             "type": "string",
             "description": "\"running\" | \"terminated\" — the operator's intent."

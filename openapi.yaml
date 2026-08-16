@@ -287,6 +287,16 @@ components:
       - project
       - ray_version
       properties:
+        condition:
+          type:
+          - string
+          - 'null'
+          description: 'Drift/health alarm raised by the reconcile engine (ADR-0004,
+            #41/#47):
+
+            "spec_drift" (out-of-band edit) or "degraded". `None` when converging
+
+            normally. Distinct from `observed_state`.'
         desired:
           type: string
           description: "\"running\" | \"terminated\" \u2014 the operator's intent."

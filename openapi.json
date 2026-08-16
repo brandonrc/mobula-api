@@ -578,6 +578,40 @@
         ]
       }
     },
+    "/api/v1/registry/clusters": {
+      "get": {
+        "tags": [
+          "registry"
+        ],
+        "operationId": "list_registry",
+        "responses": {
+          "200": {
+            "description": "The gateway's routing table",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RegistryEntryView"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No/invalid token"
+          },
+          "403": {
+            "description": "Admin only — the registry is the credential-routing table"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/services": {
       "get": {
         "tags": [
@@ -1359,6 +1393,66 @@
           }
         }
       },
+      "RegistryEntryView": {
+        "type": "object",
+        "description": "A gateway routing entry as the control plane may show it: where a\ncluster is exposed and where its dashboard head lives, but never the\ntoken itself (ADR-0003, security issue #4).",
+        "required": [
+          "id",
+          "hostname",
+          "api_base_url",
+          "token_set"
+        ],
+        "properties": {
+          "api_base_url": {
+            "type": "string"
+          },
+          "hostname": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "token_set": {
+            "type": "boolean",
+            "description": "Whether the gateway holds a static Ray token for this cluster."
+          },
+          "validation": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RegistryValidation",
+                "description": "Reserved for per-entry validation/reachability checks. Always null\ntoday: registry validation is fail-fast at startup, so every served\nentry is valid by construction."
+              }
+            ]
+          }
+        }
+      },
+      "RegistryValidation": {
+        "type": "object",
+        "description": "Placeholder shape for future per-entry health/validation results.",
+        "required": [
+          "ok"
+        ],
+        "properties": {
+          "checked_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "message": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ok": {
+            "type": "boolean"
+          }
+        }
+      },
       "ResourceUtilization": {
         "type": "object",
         "description": "One resource's live utilization within a pool: `allocated` is the Kueue\nreservation-ledger total (summed across flavors from the latest\nClusterQueue observation), `nominal` the summed flavor quotas from the\nspec, `pct` = allocated / nominal × 100 (0 when nominal is 0 — a\npercentage of nothing is undefined, and 0 keeps the type non-optional).",
@@ -1645,6 +1739,10 @@
     {
       "name": "usage",
       "description": "Usage metering (Slice 4): resource-hours reports and the Prometheus gauge over the metered samples. Reads need Read on the cluster target (Viewer+) — consumption reporting is cluster data, not pool topology. Mounted only when a store is configured."
+    },
+    {
+      "name": "registry",
+      "description": "The job gateway's routing table (ADR-0002). Admin-only: it is the credential-routing table. Static config today; dynamic registration of managed clusters is a follow-up."
     }
   ]
 }

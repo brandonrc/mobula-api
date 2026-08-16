@@ -32,7 +32,7 @@ jobs:
           scope: "@brandonrc"
       - name: Generate TS SDK
         run: |
-          docker run --rm -v "$PWD:/local" \
+          docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/local" \
             openapitools/openapi-generator-cli:${OPENAPI_GENERATOR_VERSION} generate --skip-validate-spec \
             -i /local/openapi.json -g typescript-fetch \
             -c /local/sdk/typescript/config.yaml \
@@ -54,7 +54,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Generate Rust SDK
         run: |
-          docker run --rm -v "$PWD:/local" \
+          docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/local" \
             openapitools/openapi-generator-cli:${OPENAPI_GENERATOR_VERSION} generate --skip-validate-spec \
             -i /local/openapi.json -g rust \
             -c /local/sdk/rust/config.yaml \
@@ -84,7 +84,7 @@ jobs:
           python-version: "3.12"
       - name: Generate Python SDK
         run: |
-          docker run --rm -v "$PWD:/local" \
+          docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/local" \
             openapitools/openapi-generator-cli:${OPENAPI_GENERATOR_VERSION} generate --skip-validate-spec \
             -i /local/openapi.json -g python \
             -c /local/sdk/python/config.yaml \

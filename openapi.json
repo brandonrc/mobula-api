@@ -199,6 +199,385 @@
         ]
       }
     },
+    "/api/v1/metrics": {
+      "get": {
+        "tags": [
+          "usage"
+        ],
+        "operationId": "metrics",
+        "responses": {
+          "200": {
+            "description": "Prometheus text exposition of usage gauges",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No/invalid token"
+          },
+          "403": {
+            "description": "Missing Read on cluster"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/pools": {
+      "get": {
+        "tags": [
+          "pools"
+        ],
+        "operationId": "list_pools",
+        "responses": {
+          "200": {
+            "description": "All capacity pools",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PoolView"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No/invalid token"
+          },
+          "403": {
+            "description": "Missing Read on pool"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "pools"
+        ],
+        "operationId": "create_pool",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePool"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Pool created"
+          },
+          "400": {
+            "description": "Invalid spec (bad name, no flavors, unparseable quantity)"
+          },
+          "401": {
+            "description": "No/invalid token"
+          },
+          "403": {
+            "description": "Missing Write on pool (Admin only)"
+          },
+          "409": {
+            "description": "Pool already exists (create-only in v0; spec update lands with a later PATCH)"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/pools/{name}": {
+      "get": {
+        "tags": [
+          "pools"
+        ],
+        "operationId": "get_pool",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "description": "Pool name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The pool",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PoolView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No/invalid token"
+          },
+          "403": {
+            "description": "Missing Read on pool"
+          },
+          "404": {
+            "description": "No such pool"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "pools"
+        ],
+        "operationId": "delete_pool",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "description": "Pool name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Pool deleted"
+          },
+          "401": {
+            "description": "No/invalid token"
+          },
+          "403": {
+            "description": "Missing Delete on pool (Admin only)"
+          },
+          "404": {
+            "description": "No such pool"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/pools/{name}/allocations": {
+      "get": {
+        "tags": [
+          "pools"
+        ],
+        "operationId": "list_allocations",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "description": "Pool name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The pool's allocations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AllocationSpec"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No/invalid token"
+          },
+          "403": {
+            "description": "Missing Read on pool"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/pools/{name}/allocations/{project}": {
+      "put": {
+        "tags": [
+          "pools"
+        ],
+        "operationId": "put_allocation",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "description": "Pool name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "project",
+            "in": "path",
+            "description": "Project name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PutAllocation"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Allocation recorded"
+          },
+          "400": {
+            "description": "Invalid allocation, or body pool/project mismatches the path"
+          },
+          "401": {
+            "description": "No/invalid token"
+          },
+          "403": {
+            "description": "Missing Write on pool (Admin only)"
+          },
+          "404": {
+            "description": "No such pool"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "pools"
+        ],
+        "operationId": "delete_allocation",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "description": "Pool name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "project",
+            "in": "path",
+            "description": "Project name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Allocation deleted"
+          },
+          "401": {
+            "description": "No/invalid token"
+          },
+          "403": {
+            "description": "Missing Delete on pool (Admin only)"
+          },
+          "404": {
+            "description": "No such allocation"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/pools/{name}/usage": {
+      "get": {
+        "tags": [
+          "pools"
+        ],
+        "operationId": "pool_usage",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "description": "Pool name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Live pool utilization (latest observation)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PoolUsageView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No/invalid token"
+          },
+          "403": {
+            "description": "Missing Read on pool"
+          },
+          "404": {
+            "description": "No such pool"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/services": {
       "get": {
         "tags": [
@@ -346,6 +725,94 @@
         ]
       }
     },
+    "/api/v1/usage": {
+      "get": {
+        "tags": [
+          "usage"
+        ],
+        "operationId": "usage_report",
+        "parameters": [
+          {
+            "name": "project",
+            "in": "query",
+            "description": "Filter to one project.",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "pool",
+            "in": "query",
+            "description": "Filter to one pool.",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "description": "Window start, unix seconds (default: `to - 86400`).",
+            "required": false,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "description": "Window end, unix seconds (default: now).",
+            "required": false,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resource-hours (and cost when priced) by project and pool",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsageReport"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "from must be before to"
+          },
+          "401": {
+            "description": "No/invalid token"
+          },
+          "403": {
+            "description": "Missing Read on cluster"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/version": {
       "get": {
         "tags": [
@@ -391,6 +858,56 @@
   },
   "components": {
     "schemas": {
+      "AllocationSpec": {
+        "type": "object",
+        "description": "A project's allocation within a pool (translates to a Kueue LocalQueue).\n\n`nominal` / `borrowing_limit` / `lending_limit` are reserved for a future\nper-project ClusterQueue layout (ADR-0010): in the v0 layout all\nallocations in a pool share one ClusterQueue, so these are recorded as\nLocalQueue annotations rather than enforced quotas.",
+        "required": [
+          "pool",
+          "project",
+          "namespace",
+          "nominal",
+          "borrowing_limit",
+          "lending_limit"
+        ],
+        "properties": {
+          "borrowing_limit": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "lending_limit": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "namespace": {
+            "type": "string"
+          },
+          "nominal": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "pool": {
+            "type": "string"
+          },
+          "project": {
+            "type": "string"
+          }
+        }
+      },
       "ClusterSpec": {
         "type": "object",
         "description": "Declarative spec for a managed Ray cluster.\n\nv0 targets the KubeRay backend only; fields deliberately mirror what maps\nonto a RayCluster CR so the provisioner stays a thin translation.",
@@ -539,6 +1056,18 @@
           }
         }
       },
+      "CreatePool": {
+        "type": "object",
+        "description": "Request body for creating a pool.",
+        "required": [
+          "spec"
+        ],
+        "properties": {
+          "spec": {
+            "$ref": "#/components/schemas/PoolSpec"
+          }
+        }
+      },
       "DeployService": {
         "type": "object",
         "description": "Request body to deploy or update a service.",
@@ -553,6 +1082,46 @@
           },
           "spec": {
             "$ref": "#/components/schemas/ServiceSpec"
+          }
+        }
+      },
+      "FlavorSpec": {
+        "type": "object",
+        "description": "A hardware flavor within a pool: node selection plus per-resource\nnominal quota (K8s quantity strings, e.g. \"4\", \"512Gi\").",
+        "required": [
+          "name",
+          "resources",
+          "node_labels",
+          "taints"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "node_labels": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "resources": {
+            "type": "object",
+            "description": "Resource key → nominal quota quantity string.",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "taints": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TaintSpec"
+            }
           }
         }
       },
@@ -593,6 +1162,223 @@
           },
           "submitter": {
             "type": "string"
+          }
+        }
+      },
+      "PoolSpec": {
+        "type": "object",
+        "description": "A shared capacity pool: flavors + a cohort to borrow from (ADR-0010).",
+        "required": [
+          "name",
+          "flavors",
+          "cohort",
+          "fair_sharing_weight",
+          "elastic"
+        ],
+        "properties": {
+          "cohort": {
+            "type": "string",
+            "description": "Name of the Kueue cohort this pool's ClusterQueue joins for elastic\nborrowing."
+          },
+          "elastic": {
+            "type": "boolean",
+            "description": "Whether workloads in this pool may be elastically resized (Kueue\nelastic jobs / Workload Slices)."
+          },
+          "fair_sharing_weight": {
+            "type": "number",
+            "format": "double",
+            "description": "Kueue `spec.fairSharing.weight` for the pool's ClusterQueue."
+          },
+          "flavors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FlavorSpec"
+            }
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "PoolUsageView": {
+        "type": "object",
+        "description": "Live point-in-time usage of one pool (Slice 4): built from the pool's\nlatest stored ClusterQueue/LocalQueue observation plus the spec's\nnominal quotas. NOT a timeseries — for history use `GET /api/v1/usage`.\n`projects` is the per-LocalQueue (per-project) attribution; empty when\nthe observation predates per-LQ status or none exists.",
+        "required": [
+          "pool",
+          "utilization",
+          "projects"
+        ],
+        "properties": {
+          "pool": {
+            "type": "string"
+          },
+          "projects": {
+            "type": "object",
+            "description": "project → resource → allocated quantity.",
+            "additionalProperties": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "number",
+                "format": "double"
+              },
+              "propertyNames": {
+                "type": "string"
+              }
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "sampled_at": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "When the observation was recorded (unix seconds); `null` until the\npool reconcile loop has observed this pool.",
+            "minimum": 0
+          },
+          "utilization": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ResourceUtilization"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "PoolView": {
+        "type": "object",
+        "description": "A pool as the control plane serves it: the stored spec metadata plus\n`total_nominal`, the per-resource sum of all flavors' nominal quotas.",
+        "required": [
+          "name",
+          "generation",
+          "created_at",
+          "flavors",
+          "cohort",
+          "fair_sharing_weight",
+          "elastic",
+          "total_nominal"
+        ],
+        "properties": {
+          "cohort": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "elastic": {
+            "type": "boolean"
+          },
+          "fair_sharing_weight": {
+            "type": "number",
+            "format": "double"
+          },
+          "flavors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FlavorSpec"
+            }
+          },
+          "generation": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Bumps when the spec changes (same convention as clusters).",
+            "minimum": 0
+          },
+          "name": {
+            "type": "string"
+          },
+          "total_nominal": {
+            "type": "object",
+            "description": "Resource key → summed nominal quota across flavors, as a string.\nA resource key whose quantity fails to parse on ANY flavor is\nomitted entirely (a partial sum would misreport capacity); the\nfailure is logged. Display math only — the spec stays authoritative.",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "PutAllocation": {
+        "type": "object",
+        "description": "Request body for putting an allocation: `AllocationSpec` minus\n`pool`/`project`, which come from the path. If the body still carries\nthem, they must match the path or the request is rejected.",
+        "required": [
+          "namespace",
+          "nominal",
+          "borrowing_limit",
+          "lending_limit"
+        ],
+        "properties": {
+          "borrowing_limit": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "lending_limit": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "namespace": {
+            "type": "string"
+          },
+          "nominal": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "pool": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "project": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "ResourceUtilization": {
+        "type": "object",
+        "description": "One resource's live utilization within a pool: `allocated` is the Kueue\nreservation-ledger total (summed across flavors from the latest\nClusterQueue observation), `nominal` the summed flavor quotas from the\nspec, `pct` = allocated / nominal × 100 (0 when nominal is 0 — a\npercentage of nothing is undefined, and 0 keeps the type non-optional).",
+        "required": [
+          "allocated",
+          "nominal",
+          "pct"
+        ],
+        "properties": {
+          "allocated": {
+            "type": "number",
+            "format": "double"
+          },
+          "nominal": {
+            "type": "number",
+            "format": "double"
+          },
+          "pct": {
+            "type": "number",
+            "format": "double"
           }
         }
       },
@@ -674,6 +1460,26 @@
           }
         }
       },
+      "TaintSpec": {
+        "type": "object",
+        "description": "A Kubernetes taint on a flavor's nodes. `effect` is e.g. \"NoSchedule\";\nvalidated non-empty here (the set of legal effects is Kubernetes', not\nours).",
+        "required": [
+          "key",
+          "value",
+          "effect"
+        ],
+        "properties": {
+          "effect": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        }
+      },
       "UpgradeStrategy": {
         "type": "string",
         "description": "How to roll out a new version of a service.",
@@ -681,6 +1487,71 @@
           "canary",
           "in_place"
         ]
+      },
+      "UsageGroup": {
+        "type": "object",
+        "description": "One (project, pool) group of the usage report.",
+        "required": [
+          "project",
+          "pool",
+          "resource_hours"
+        ],
+        "properties": {
+          "cost_usd": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Total cost in USD; `null` when no price sheet is configured."
+          },
+          "pool": {
+            "type": "string",
+            "description": "Empty string = the project has no allocation."
+          },
+          "project": {
+            "type": "string",
+            "description": "Empty string = the pool-level aggregate row (Kueue path only)."
+          },
+          "resource_hours": {
+            "type": "object",
+            "description": "resource → resource-hours over the window.",
+            "additionalProperties": {
+              "type": "number",
+              "format": "double"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "UsageReport": {
+        "type": "object",
+        "description": "Response of `GET /api/v1/usage`.",
+        "required": [
+          "from",
+          "to",
+          "groups"
+        ],
+        "properties": {
+          "from": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "groups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UsageGroup"
+            }
+          },
+          "to": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
       },
       "VersionInfo": {
         "type": "object",
@@ -766,6 +1637,14 @@
     {
       "name": "services",
       "description": "Ray Serve services (RayService). Deploy/update/delete need Write on the service target (Developer or Admin — deploying is code); reads are open to any authenticated role. KubeRay handles zero-downtime canary rollout."
+    },
+    {
+      "name": "pools",
+      "description": "Capacity pools and per-project allocations (ADR-0010): platform configuration, not app lifecycle. Reads need any authenticated role; create/delete/allocation mutations are Admin-only. Mounted only when a store is configured."
+    },
+    {
+      "name": "usage",
+      "description": "Usage metering (Slice 4): resource-hours reports and the Prometheus gauge over the metered samples. Reads need Read on the cluster target (Viewer+) — consumption reporting is cluster data, not pool topology. Mounted only when a store is configured."
     }
   ]
 }

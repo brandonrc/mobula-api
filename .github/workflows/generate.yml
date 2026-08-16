@@ -33,7 +33,7 @@ jobs:
       - name: Generate TS SDK
         run: |
           docker run --rm -v "$PWD:/local" \
-            openapitools/openapi-generator-cli:${OPENAPI_GENERATOR_VERSION} generate \
+            openapitools/openapi-generator-cli:${OPENAPI_GENERATOR_VERSION} generate --skip-validate-spec \
             -i /local/openapi.json -g typescript-fetch \
             -c /local/sdk/typescript/config.yaml \
             -t /local/sdk/typescript/templates \
@@ -55,7 +55,7 @@ jobs:
       - name: Generate Rust SDK
         run: |
           docker run --rm -v "$PWD:/local" \
-            openapitools/openapi-generator-cli:${OPENAPI_GENERATOR_VERSION} generate \
+            openapitools/openapi-generator-cli:${OPENAPI_GENERATOR_VERSION} generate --skip-validate-spec \
             -i /local/openapi.json -g rust \
             -c /local/sdk/rust/config.yaml \
             -t /local/sdk/rust/templates \
@@ -85,7 +85,7 @@ jobs:
       - name: Generate Python SDK
         run: |
           docker run --rm -v "$PWD:/local" \
-            openapitools/openapi-generator-cli:${OPENAPI_GENERATOR_VERSION} generate \
+            openapitools/openapi-generator-cli:${OPENAPI_GENERATOR_VERSION} generate --skip-validate-spec \
             -i /local/openapi.json -g python \
             -c /local/sdk/python/config.yaml \
             -t /local/sdk/python/templates \

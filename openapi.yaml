@@ -134,7 +134,8 @@ paths:
     get:
       tags:
       - audit
-      summary: "List the persisted audit trail, Admin-only (api-v1.md \xA75.9)."
+      summary: "List the persisted audit trail, Admin/Auditor-only (api-v1.md \xA7\
+        5.9)."
       operationId: list_audit_events
       parameters:
       - name: limit
@@ -258,7 +259,52 @@ paths:
         '401':
           description: No/invalid token
         '403':
-          description: "Admin only \u2014 audit subjects are Admin data"
+          description: "Admin or Auditor only \u2014 audit subjects are Admin data"
+      security:
+      - bearer: []
+  /api/v1/audit/verify:
+    get:
+      tags:
+      - audit
+      summary: Replay the audit hash chain over a window, Admin/Auditor-only (#59).
+      operationId: verify_audit_trail
+      parameters:
+      - name: from_seq
+        in: query
+        description: "First `seq` to check (default 1 \u2014 the whole trail from\
+          \ genesis).\nThe window chains from the newest preceding row's stored hash,\
+          \ so a\nmid-trail window verifies against the same head it was written with."
+        required: false
+        schema:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          minimum: 0
+      - name: limit
+        in: query
+        description: 'Max rows to replay (default 100_000, clamped to 1_000_000).
+          Trails
+
+          larger than one window verify in successive `from_seq` windows.'
+        required: false
+        schema:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          minimum: 0
+      responses:
+        '200':
+          description: Chain replay result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditVerifyResponse'
+        '401':
+          description: No/invalid token
+        '403':
+          description: Admin or Auditor only
       security:
       - bearer: []
   /api/v1/auth/login:
@@ -1392,6 +1438,34 @@ components:
         target:
           type: string
           description: e.g. "job" | "cluster" | "service" | "pool".
+    AuditVerifyResponse:
+      type: object
+      description: Response of `GET /api/v1/audit/verify`.
+      required:
+      - ok
+      - events_checked
+      properties:
+        events_checked:
+          type: integer
+          format: int64
+          description: 'Rows that verified before the replay stopped (the whole window
+            on
+
+            success; the rows before the broken one on failure).'
+          minimum: 0
+        first_broken_seq:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          description: 'Seq of the first row whose stored `chain_hash` doesn''t match
+            the
+
+            replay; `null` when the window verifies clean.'
+          minimum: 0
+        ok:
+          type: boolean
+          description: True when every row in the window matched the replayed chain.
     ClusterSpec:
       type: object
       description: 'Declarative spec for a managed Ray cluster.
@@ -1688,6 +1762,7 @@ components:
       - developer
       - operator
       - admin
+      - auditor
     LocalUserView:
       type: object
       description: "The public projection of a local user \u2014 everything EXCEPT\
@@ -2069,8 +2144,13 @@ components:
       - operator
       - developer
       - viewer
+      - auditor
       properties:
         admin:
+          type: array
+          items:
+            type: string
+        auditor:
           type: array
           items:
             type: string
@@ -2395,8 +2475,10 @@ tags:
 - name: audit
   description: "The persisted audit trail (api-v1.md \xA75.9): every authn/authz decision,\
     \ mutation, and proxied gateway request, newest-first with seq-cursor pagination\
-    \ and CSV export. Admin-only \u2014 audit subjects are Admin data. Mounted only\
-    \ when a store is configured."
+    \ and CSV export. Rows are hash-chained for tamper-evidence (#59); `audit/verify`\
+    \ replays the chain. Reads need Read on the audit target \u2014 Admin or Auditor\
+    \ \u2014 and are themselves audited (`audit_read` rows). Mounted only when a store\
+    \ is configured."
 - name: auth
   description: 'Local auth (ADR-0011): username/password login issuing opaque (unsigned)
     bearer tokens, personal access token management, provider metadata, and Admin-only

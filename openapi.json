@@ -199,7 +199,7 @@
         "tags": [
           "audit"
         ],
-        "summary": "List the persisted audit trail, Admin-only (api-v1.md §5.9).",
+        "summary": "List the persisted audit trail, Admin/Auditor-only (api-v1.md §5.9).",
         "operationId": "list_audit_events",
         "parameters": [
           {
@@ -379,7 +379,69 @@
             "description": "No/invalid token"
           },
           "403": {
-            "description": "Admin only — audit subjects are Admin data"
+            "description": "Admin or Auditor only — audit subjects are Admin data"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/audit/verify": {
+      "get": {
+        "tags": [
+          "audit"
+        ],
+        "summary": "Replay the audit hash chain over a window, Admin/Auditor-only (#59).",
+        "operationId": "verify_audit_trail",
+        "parameters": [
+          {
+            "name": "from_seq",
+            "in": "query",
+            "description": "First `seq` to check (default 1 — the whole trail from genesis).\nThe window chains from the newest preceding row's stored hash, so a\nmid-trail window verifies against the same head it was written with.",
+            "required": false,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Max rows to replay (default 100_000, clamped to 1_000_000). Trails\nlarger than one window verify in successive `from_seq` windows.",
+            "required": false,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Chain replay result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditVerifyResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No/invalid token"
+          },
+          "403": {
+            "description": "Admin or Auditor only"
           }
         },
         "security": [
@@ -2102,6 +2164,35 @@
           }
         }
       },
+      "AuditVerifyResponse": {
+        "type": "object",
+        "description": "Response of `GET /api/v1/audit/verify`.",
+        "required": [
+          "ok",
+          "events_checked"
+        ],
+        "properties": {
+          "events_checked": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Rows that verified before the replay stopped (the whole window on\nsuccess; the rows before the broken one on failure).",
+            "minimum": 0
+          },
+          "first_broken_seq": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Seq of the first row whose stored `chain_hash` doesn't match the\nreplay; `null` when the window verifies clean.",
+            "minimum": 0
+          },
+          "ok": {
+            "type": "boolean",
+            "description": "True when every row in the window matched the replayed chain."
+          }
+        }
+      },
       "ClusterSpec": {
         "type": "object",
         "description": "Declarative spec for a managed Ray cluster.\n\nv0 targets the KubeRay backend only; fields deliberately mirror what maps\nonto a RayCluster CR so the provisioner stays a thin translation.",
@@ -2468,7 +2559,8 @@
           "viewer",
           "developer",
           "operator",
-          "admin"
+          "admin",
+          "auditor"
         ]
       },
       "LocalUserView": {
@@ -2937,10 +3029,17 @@
           "admin",
           "operator",
           "developer",
-          "viewer"
+          "viewer",
+          "auditor"
         ],
         "properties": {
           "admin": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "auditor": {
             "type": "array",
             "items": {
               "type": "string"
@@ -3355,7 +3454,7 @@
     },
     {
       "name": "audit",
-      "description": "The persisted audit trail (api-v1.md §5.9): every authn/authz decision, mutation, and proxied gateway request, newest-first with seq-cursor pagination and CSV export. Admin-only — audit subjects are Admin data. Mounted only when a store is configured."
+      "description": "The persisted audit trail (api-v1.md §5.9): every authn/authz decision, mutation, and proxied gateway request, newest-first with seq-cursor pagination and CSV export. Rows are hash-chained for tamper-evidence (#59); `audit/verify` replays the chain. Reads need Read on the audit target — Admin or Auditor — and are themselves audited (`audit_read` rows). Mounted only when a store is configured."
     },
     {
       "name": "auth",

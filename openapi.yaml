@@ -10,6 +10,31 @@ info:
     name: Apache-2.0
   version: 0.0.1
 paths:
+  /api/v1/access/roles:
+    get:
+      tags:
+      - access
+      summary: 'Effective role mappings for the access page. Admin-only. v1 is
+
+        read-only: with an OIDC validator the mappings come from the auth
+
+        config file; without one (local auth) `mappings` is null and roles are
+
+        managed per-user via `/api/v1/auth/users`.'
+      operationId: list_roles
+      responses:
+        '200':
+          description: Role mappings and their source
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RolesResponse'
+        '401':
+          description: No/invalid token
+        '403':
+          description: "Admin only \u2014 access-control surface (api-v1.md \xA72.2)"
+      security:
+      - bearer: []
   /api/v1/audit:
     get:
       tags:
@@ -261,6 +286,100 @@ paths:
           description: No such token for this caller
       security:
       - bearer: []
+  /api/v1/auth/users:
+    get:
+      tags:
+      - auth
+      summary: 'List all local users. Admin-only; hashes never serialize
+
+        ([`LocalUserView`]).'
+      operationId: list_users
+      responses:
+        '200':
+          description: All local users, ordered by username
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LocalUserView'
+        '401':
+          description: No/invalid token
+        '403':
+          description: Admin only
+      security:
+      - bearer: []
+    post:
+      tags:
+      - auth
+      summary: 'Create a local user. Admin-only. 201 with the wire-safe view; 400
+        on a
+
+        bad username/short password; 409 when the username is taken.'
+      operationId: create_user
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+        required: true
+      responses:
+        '201':
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocalUserView'
+        '400':
+          description: Invalid username (RFC 1123) or password under 8 chars
+        '401':
+          description: No/invalid token
+        '403':
+          description: Admin only
+        '409':
+          description: Username already taken
+      security:
+      - bearer: []
+  /api/v1/auth/users/{username}:
+    put:
+      tags:
+      - auth
+      summary: 'Update a local user: role, disabled flag, and/or password. Admin-only;
+
+        404 for an unknown user. Changing your OWN role/disabled is allowed in
+
+        v0 (no footgun guard) but is audit-logged loudly.'
+      operationId: update_user
+      parameters:
+      - name: username
+        in: path
+        description: The local user's username
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+        required: true
+      responses:
+        '200':
+          description: User updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocalUserView'
+        '400':
+          description: Password under 8 chars
+        '401':
+          description: No/invalid token
+        '403':
+          description: Admin only
+        '404':
+          description: No such user
+      security:
+      - bearer: []
   /api/v1/clusters:
     get:
       tags:
@@ -353,6 +472,30 @@ paths:
           description: Missing Write on cluster (Operator/Admin only)
         '404':
           description: No such cluster
+      security:
+      - bearer: []
+  /api/v1/identity:
+    get:
+      tags:
+      - access
+      summary: '"Who am I": the resolved identity for any authenticated caller. In
+        dev
+
+        mode (no validator AND no local auth) the auth middleware attaches no
+
+        identity, and this returns the specced dev identity so the
+
+        unauthenticated dev loop renders the full console.'
+      operationId: identity
+      responses:
+        '200':
+          description: The caller's identity (the dev identity when auth is disabled)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IdentityResponse'
+        '401':
+          description: No/invalid token (only when auth is configured)
       security:
       - bearer: []
   /api/v1/jobs:
@@ -1162,6 +1305,28 @@ components:
           type: string
         token:
           type: string
+    CreateUserRequest:
+      type: object
+      required:
+      - username
+      - password
+      - role
+      properties:
+        email:
+          type:
+          - string
+          - 'null'
+        password:
+          type: string
+          description: 'Minimum 8 characters; bcrypt-hashed at rest, never stored
+            or
+
+            returned in plaintext.'
+        role:
+          $ref: '#/components/schemas/LocalRole'
+        username:
+          type: string
+          description: RFC 1123 subdomain (k8s-name-safe); unique.
     DeployService:
       type: object
       description: Request body to deploy or update a service.
@@ -1204,6 +1369,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/TaintSpec'
+    IdentityResponse:
+      type: object
+      description: '`GET /api/v1/identity` response: the caller''s resolved identity.'
+      required:
+      - subject
+      - groups
+      - roles
+      properties:
+        email:
+          type:
+          - string
+          - 'null'
+        groups:
+          type: array
+          items:
+            type: string
+        roles:
+          type: array
+          items:
+            type: string
+          description: Snake_case role names ("viewer", "developer", "operator", "admin").
+        subject:
+          type: string
     JobView:
       type: object
       description: "A job in the persistent, cross-cluster history (Phase 3, spec\
@@ -1246,6 +1434,31 @@ components:
       - developer
       - operator
       - admin
+    LocalUserView:
+      type: object
+      description: "The public projection of a local user \u2014 everything EXCEPT\
+        \ the password\nhash and the lockout internals that are nobody else's business."
+      required:
+      - username
+      - role
+      - disabled
+      - created_at
+      properties:
+        created_at:
+          type: integer
+          format: int64
+          description: Unix seconds.
+          minimum: 0
+        disabled:
+          type: boolean
+        email:
+          type:
+          - string
+          - 'null'
+        role:
+          $ref: '#/components/schemas/LocalRole'
+        username:
+          type: string
     LoginIdentity:
       type: object
       description: The identity half of a login response.
@@ -1547,6 +1760,58 @@ components:
         pct:
           type: number
           format: double
+    RoleMappingsView:
+      type: object
+      description: "Group\u2192role mappings from the OIDC auth config; shape mirrors\n\
+        `mobula_auth::RoleMappings` (a wire twin so `mobula-auth` stays free of\n\
+        serialization/api deps)."
+      required:
+      - admin
+      - operator
+      - developer
+      - viewer
+      properties:
+        admin:
+          type: array
+          items:
+            type: string
+        developer:
+          type: array
+          items:
+            type: string
+        operator:
+          type: array
+          items:
+            type: string
+        viewer:
+          type: array
+          items:
+            type: string
+    RolesResponse:
+      type: object
+      description: "`GET /api/v1/access/roles` response. `mappings` is null when no\
+        \ OIDC\nvalidator is configured (local-auth or dev mode): group\u2192role\
+        \ mappings\nare meaningless there \u2014 local users carry their role as a\
+        \ column."
+      required:
+      - source
+      - editable
+      properties:
+        editable:
+          type: boolean
+          description: "Always false in v1 \u2014 editing stays in the config file\
+            \ + restart."
+        mappings:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/RoleMappingsView'
+        source:
+          type: string
+          description: '"file" (mappings from the OIDC auth config) or "local" (no
+            OIDC
+
+            validator; roles live on the local user rows).'
+          example: file
     ServiceSpec:
       type: object
       description: Declarative spec for a managed Serve service.
@@ -1627,6 +1892,22 @@ components:
           type: string
         value:
           type: string
+    UpdateUserRequest:
+      type: object
+      properties:
+        disabled:
+          type:
+          - boolean
+          - 'null'
+        password:
+          type:
+          - string
+          - 'null'
+          description: New password (min 8 chars); replaces the bcrypt hash.
+        role:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/LocalRole'
     UpgradeStrategy:
       type: string
       description: How to roll out a new version of a service.
@@ -1766,6 +2047,10 @@ tags:
     \ when a store is configured."
 - name: auth
   description: 'Local auth (ADR-0011): username/password login issuing opaque (unsigned)
-    bearer tokens, personal access token management, and provider metadata. `login`
-    and `providers` are public; token routes are owner-scoped. Mounted only with `serve
-    --local-auth` (except `providers`).'
+    bearer tokens, personal access token management, provider metadata, and Admin-only
+    local user management. `login` and `providers` are public; token routes are owner-scoped;
+    user routes are Admin-only. Mounted only with `serve --local-auth` (except `providers`).'
+- name: access
+  description: "Identity & access (api-v1.md \xA75.8): `identity` is 'who am I' for\
+    \ any authenticated caller (the dev identity when auth is disabled); `access/roles`\
+    \ is the Admin-only read of the effective role mappings. Mounted unconditionally."

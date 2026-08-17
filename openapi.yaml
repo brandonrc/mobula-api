@@ -10,6 +10,101 @@ info:
     name: Apache-2.0
   version: 0.0.1
 paths:
+  /api/v1/access/assignments:
+    get:
+      tags:
+      - access
+      summary: List every scoped role assignment, Admin-only.
+      operationId: list_assignments
+      responses:
+        '200':
+          description: All role assignments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AssignmentView'
+        '401':
+          description: No/invalid token
+        '403':
+          description: "Admin only \u2014 access-control surface (api-v1.md \xA72.2)"
+        '503':
+          description: No store configured (gateway-only deployment)
+      security:
+      - bearer: []
+  /api/v1/access/assignments/{principal}:
+    put:
+      tags:
+      - access
+      summary: "Create or replace one assignment, Admin-only. The role and scope grammar\n\
+        are validated here \u2014 the store is dumb persistence."
+      operationId: upsert_assignment
+      parameters:
+      - name: principal
+        in: path
+        description: The Identity subject to bind
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpsertAssignment'
+        required: true
+      responses:
+        '200':
+          description: Assignment stored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssignmentView'
+        '400':
+          description: Unknown role or invalid scope grammar
+        '401':
+          description: No/invalid token
+        '403':
+          description: Admin only
+        '503':
+          description: No store configured
+      security:
+      - bearer: []
+    delete:
+      tags:
+      - access
+      summary: Remove one assignment, Admin-only; 404 when the triple doesn't exist.
+      operationId: delete_assignment
+      parameters:
+      - name: principal
+        in: path
+        description: The Identity subject
+        required: true
+        schema:
+          type: string
+      - name: role
+        in: query
+        required: true
+        schema:
+          type: string
+      - name: scope
+        in: query
+        required: true
+        schema:
+          type: string
+      responses:
+        '204':
+          description: Assignment removed
+        '401':
+          description: No/invalid token
+        '403':
+          description: Admin only
+        '404':
+          description: No such assignment
+        '503':
+          description: No store configured
+      security:
+      - bearer: []
   /api/v1/access/roles:
     get:
       tags:
@@ -474,6 +569,91 @@ paths:
           description: No such cluster
       security:
       - bearer: []
+  /api/v1/clusters/{id}/metrics:
+    get:
+      tags:
+      - clusters
+      operationId: cluster_metrics
+      parameters:
+      - name: id
+        in: path
+        description: Cluster id
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The Ray head's Prometheus exposition, proxied verbatim
+          content:
+            text/plain:
+              schema:
+                type: string
+        '401':
+          description: No/invalid token
+        '403':
+          description: Missing Read on cluster
+        '404':
+          description: 'Metrics unavailable: the backend exposes no metrics endpoint
+            for this cluster'
+        '502':
+          description: The Ray head could not be reached or its response exceeded
+            the 4MiB cap
+      security:
+      - bearer: []
+  /api/v1/clusters/{id}/resume:
+    post:
+      tags:
+      - clusters
+      operationId: resume_cluster
+      parameters:
+      - name: id
+        in: path
+        description: Cluster id
+        required: true
+        schema:
+          type: string
+      responses:
+        '202':
+          description: Desired state set back to running; reconciler re-provisions
+            (suspend=false)
+        '401':
+          description: No/invalid token
+        '403':
+          description: Missing Write on cluster (Operator/Admin only)
+        '404':
+          description: No such cluster
+        '409':
+          description: Illegal state transition, or the cluster's project is queue-assigned
+            (Kueue owns suspend)
+      security:
+      - bearer: []
+  /api/v1/clusters/{id}/suspend:
+    post:
+      tags:
+      - clusters
+      operationId: suspend_cluster
+      parameters:
+      - name: id
+        in: path
+        description: Cluster id
+        required: true
+        schema:
+          type: string
+      responses:
+        '202':
+          description: Desired state set to suspended; reconciler releases compute
+            (spec.suspend=true)
+        '401':
+          description: No/invalid token
+        '403':
+          description: Missing Write on cluster (Operator/Admin only)
+        '404':
+          description: No such cluster
+        '409':
+          description: Illegal state transition, or the cluster's project is queue-assigned
+            (Kueue owns suspend)
+      security:
+      - bearer: []
   /api/v1/identity:
     get:
       tags:
@@ -525,7 +705,7 @@ paths:
       operationId: metrics
       responses:
         '200':
-          description: Prometheus text exposition of usage gauges
+          description: Prometheus text exposition of usage and control-plane gauges
           content:
             text/plain:
               schema:
@@ -1068,6 +1248,29 @@ components:
           type: boolean
         username:
           type: string
+    AssignmentView:
+      type: object
+      description: One assignment as the wire sees it.
+      required:
+      - principal
+      - role
+      - scope
+      - created_at
+      properties:
+        created_at:
+          type: integer
+          format: int64
+          description: Unix seconds when the assignment was first written.
+          minimum: 0
+        principal:
+          type: string
+          description: The Identity `subject` the assignment applies to.
+        role:
+          type: string
+          description: '"viewer" | "developer" | "operator" | "admin".'
+        scope:
+          type: string
+          description: '"*" (global) or "project:<name>".'
     AuditDecision:
       type: string
       description: 'Whether Mobula allowed or refused the thing the event describes.
@@ -1268,7 +1471,8 @@ components:
             normally. Distinct from `observed_state`.'
         desired:
           type: string
-          description: "\"running\" | \"terminated\" \u2014 the operator's intent."
+          description: "\"running\" | \"suspended\" | \"terminated\" \u2014 the operator's\
+            \ intent."
         est_max_hourly:
           type:
           - number
@@ -2043,6 +2247,19 @@ components:
       enum:
       - canary
       - in_place
+    UpsertAssignment:
+      type: object
+      description: Body of `PUT /api/v1/access/assignments/{principal}`.
+      required:
+      - role
+      - scope
+      properties:
+        role:
+          type: string
+          description: '"viewer" | "developer" | "operator" | "admin".'
+        scope:
+          type: string
+          description: '"*" (global) or "project:<name>".'
     UsageGroup:
       type: object
       description: One (project, pool) group of the usage report.

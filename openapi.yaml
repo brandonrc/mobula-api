@@ -856,6 +856,56 @@ paths:
           description: Missing Write on service (Developer/Admin only)
       security:
       - bearer: []
+  /api/v1/settings/policy:
+    get:
+      tags:
+      - settings
+      summary: "The effective governance policy. Admin-only: quotas and prices are\n\
+        platform configuration (api-v1.md \xA72.2), classified with `Target::Cluster`\n\
+        like the registry/audit surfaces."
+      operationId: get_policy
+      responses:
+        '200':
+          description: The effective policy and its provenance
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyView'
+        '401':
+          description: No/invalid token
+        '403':
+          description: "Admin only \u2014 governance is platform configuration"
+      security:
+      - bearer: []
+    put:
+      tags:
+      - settings
+      summary: "Replace sections of the governance policy. Admin-only. Edits take\
+        \ effect\non the very next request \u2014 quota admission, cost estimates,\
+        \ and the usage\nroll-up all read the store per request. Emits an `update_policy`\
+        \ audit\nevent on success."
+      operationId: update_policy
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePolicy'
+        required: true
+      responses:
+        '200':
+          description: The policy after the update (source is now "store")
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyView'
+        '400':
+          description: Negative or non-finite price/quota value
+        '401':
+          description: No/invalid token
+        '403':
+          description: "Admin only \u2014 governance is platform configuration"
+      security:
+      - bearer: []
   /api/v1/usage:
     get:
       tags:
@@ -1512,6 +1562,51 @@ components:
       properties:
         issuer:
           type: string
+    PolicyView:
+      type: object
+      description: '`GET /api/v1/settings/policy` response: the effective policy plus
+        its
+
+        provenance.'
+      required:
+      - quotas
+      - source
+      - editable
+      properties:
+        editable:
+          type: boolean
+          description: "Always true in v1 \u2014 the policy is editable via PUT."
+        prices:
+          type:
+          - object
+          - 'null'
+          description: "resource \u2192 $/unit-hour; `null` when no price sheet is\
+            \ configured."
+          additionalProperties:
+            type: number
+            format: double
+          propertyNames:
+            type: string
+        quotas:
+          type: object
+          description: "project \u2192 (resource \u2192 limit). Empty when no quotas\
+            \ are configured."
+          additionalProperties:
+            type: object
+            additionalProperties:
+              type: number
+              format: double
+            propertyNames:
+              type: string
+          propertyNames:
+            type: string
+        source:
+          type: string
+          description: '"file" (the untouched `--policy` boot seed) | "store" (edited
+            via
+
+            PUT) | "none" (no policy configured at all).'
+          example: file
     PoolSpec:
       type: object
       description: 'A shared capacity pool: flavors + a cohort to borrow from (ADR-0010).'
@@ -1892,6 +1987,40 @@ components:
           type: string
         value:
           type: string
+    UpdatePolicy:
+      type: object
+      description: 'Request body for `PUT /api/v1/settings/policy`. Section-replace
+
+        semantics: a present key replaces that whole section (`prices: null`
+
+        clears the price sheet; `quotas: {}` clears all quotas); an absent key
+
+        leaves that section untouched.'
+      properties:
+        prices:
+          type:
+          - object
+          - 'null'
+          description: Present (incl. explicit `null`) replaces/clears the price sheet.
+          additionalProperties:
+            type: number
+            format: double
+          propertyNames:
+            type: string
+        quotas:
+          type:
+          - object
+          - 'null'
+          description: Present replaces the whole quota map (`{}` clears all quotas).
+          additionalProperties:
+            type: object
+            additionalProperties:
+              type: number
+              format: double
+            propertyNames:
+              type: string
+          propertyNames:
+            type: string
     UpdateUserRequest:
       type: object
       properties:
@@ -2036,6 +2165,12 @@ tags:
     \ gauge over the metered samples. Reads need Read on the cluster target (Viewer+)\
     \ \u2014 consumption reporting is cluster data, not pool topology. Mounted only\
     \ when a store is configured."
+- name: settings
+  description: "Governance policy management (api-v1.md \xA75.16): the effective price\
+    \ sheet and per-project quotas. Admin-only. The `--policy` file is the boot-time\
+    \ default; the store row wins once edited via PUT, and every consumer (quota admission,\
+    \ cost estimates, usage roll-up) reads the store per request, so edits apply without\
+    \ a restart. Mounted only when a store is configured."
 - name: registry
   description: 'The job gateway''s routing table (ADR-0002). Admin-only: it is the
     credential-routing table. Static config today; dynamic registration of managed

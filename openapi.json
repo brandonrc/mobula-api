@@ -829,7 +829,7 @@
             "description": "Desired state recorded; reconciler will converge"
           },
           "400": {
-            "description": "Invalid spec (bad quantity, min>max)"
+            "description": "Invalid spec (bad quantity, min>max), or GPU tenant-isolation violation (fractional GPU in a multi-tenant pool)"
           },
           "401": {
             "description": "No/invalid token"
@@ -1395,7 +1395,7 @@
             "description": "Allocation recorded"
           },
           "400": {
-            "description": "Invalid allocation, or body pool/project mismatches the path"
+            "description": "Invalid allocation, body pool/project mismatches the path, or GPU tenant-isolation violation (time-slice pool shared by >1 project)"
           },
           "401": {
             "description": "No/invalid token"
@@ -2479,6 +2479,15 @@
           }
         }
       },
+      "GpuSharing": {
+        "type": "string",
+        "description": "How a pool's GPUs may be shared between workloads (#58).\n\nNVIDIA GPU time-slicing (and fractional `nvidia.com/gpu` requests via the\ndevice plugin) shares one GPU's SMs across processes with no hardware\nisolation — acceptable within one tenant, never across tenants. MIG is\nhardware partitioning and whole-GPU allocation needs no sharing at all,\nso both are isolation-safe. The tenant-isolation rule itself is enforced\nby `mobula-policy::gpu` at admission time; this field is the per-pool\nknob it evaluates.",
+        "enum": [
+          "whole-gpu",
+          "mig",
+          "time-slice"
+        ]
+      },
       "IdentityResponse": {
         "type": "object",
         "description": "`GET /api/v1/identity` response: the caller's resolved identity.",
@@ -2751,6 +2760,17 @@
               "$ref": "#/components/schemas/FlavorSpec"
             }
           },
+          "gpu_sharing": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GpuSharing",
+                "description": "GPU sharing mode for this pool (#58). `None` inherits the platform\ndefault (`[gpu] default_sharing` in the policy file, itself\ndefaulting to `whole-gpu`). A pool shared by more than one project\nmay not resolve to `time-slice` — enforced at admission by\n`mobula-policy::gpu`, not here (core validates shape; tenancy is\nknown only at the API edge, where allocations live)."
+              }
+            ]
+          },
           "name": {
             "type": "string"
           }
@@ -2845,6 +2865,17 @@
             "format": "int64",
             "description": "Bumps when the spec changes (same convention as clusters).",
             "minimum": 0
+          },
+          "gpu_sharing": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GpuSharing",
+                "description": "The pool's GPU sharing mode (#58); `null` = the platform default\n(`[gpu] default_sharing`, itself defaulting to `whole-gpu`)."
+              }
+            ]
           },
           "name": {
             "type": "string"

@@ -932,6 +932,54 @@
         ]
       }
     },
+    "/api/v1/clusters/{id}/events": {
+      "get": {
+        "tags": [
+          "clusters"
+        ],
+        "operationId": "cluster_events",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Cluster id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Kubernetes Events for the cluster's objects, newest first (capped)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClusterEvents"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No/invalid token"
+          },
+          "403": {
+            "description": "Missing Read on cluster"
+          },
+          "404": {
+            "description": "No such cluster, or the backend exposes no events"
+          },
+          "503": {
+            "description": "The event source (Kubernetes) could not be reached"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/clusters/{id}/jobs": {
       "get": {
         "tags": [
@@ -983,6 +1031,79 @@
         ]
       }
     },
+    "/api/v1/clusters/{id}/logs": {
+      "get": {
+        "tags": [
+          "clusters"
+        ],
+        "operationId": "cluster_logs",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Cluster id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "node",
+            "in": "query",
+            "description": "Pod to tail (one of the cluster's pods); defaults to the head pod.",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "tail",
+            "in": "query",
+            "description": "Number of trailing lines to return (default 200, capped at 5000).",
+            "required": false,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Recent (tail-capped) pod logs plus the list of tailable pods",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClusterLogs"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No/invalid token"
+          },
+          "403": {
+            "description": "Missing Read on cluster"
+          },
+          "404": {
+            "description": "No such cluster/pod, or the backend exposes no logs"
+          },
+          "503": {
+            "description": "The log source (Kubernetes) could not be reached"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/clusters/{id}/metrics": {
       "get": {
         "tags": [
@@ -1002,11 +1123,11 @@
         ],
         "responses": {
           "200": {
-            "description": "The Ray head's Prometheus exposition, proxied verbatim",
+            "description": "Normalized cluster resource-usage summary (CPU/GPU/mem used vs total + node counts)",
             "content": {
-              "text/plain": {
+              "application/json": {
                 "schema": {
-                  "type": "string"
+                  "$ref": "#/components/schemas/ClusterMetrics"
                 }
               }
             }
@@ -1018,10 +1139,10 @@
             "description": "Missing Read on cluster"
           },
           "404": {
-            "description": "Metrics unavailable: the backend exposes no metrics endpoint for this cluster"
+            "description": "No such cluster, or no reachable Ray dashboard for it"
           },
-          "502": {
-            "description": "The Ray head could not be reached or its response exceeded the 4MiB cap"
+          "503": {
+            "description": "The cluster's Ray dashboard could not be reached"
           }
         },
         "security": [
@@ -2292,6 +2413,212 @@
           }
         }
       },
+      "ClusterEvent": {
+        "type": "object",
+        "description": "One normalized Kubernetes Event about a cluster object (api-v1.md §5.8).\nFields are `Option` because the two Event schemas (core/v1 and\nevents.k8s.io/v1) name them differently and any of them may be absent.",
+        "required": [
+          "type",
+          "count"
+        ],
+        "properties": {
+          "count": {
+            "type": "integer",
+            "format": "int32",
+            "description": "How many times this event has fired (K8s collapses repeats). Defaults\nto 1 when the source records no count.",
+            "minimum": 0
+          },
+          "first_seen": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "First occurrence (RFC3339); `None` when the source omits it."
+          },
+          "last_seen": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Most recent occurrence (RFC3339); the field the list is sorted by."
+          },
+          "message": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Human-readable message."
+          },
+          "object": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The object the event is about, as `Kind/name` (e.g. `Pod/foo-head-abc`)."
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Short machine reason (`FailedScheduling`, `Pulled`, `BackOff`, …)."
+          },
+          "type": {
+            "type": "string",
+            "description": "Event severity: `Normal` or `Warning` (verbatim from `type`)."
+          }
+        }
+      },
+      "ClusterEvents": {
+        "type": "object",
+        "description": "Kubernetes Events for one cluster's objects (api-v1.md §5.8), newest first\nand capped — the body of `GET /api/v1/clusters/{id}/events`.",
+        "required": [
+          "cluster_id",
+          "events"
+        ],
+        "properties": {
+          "cluster_id": {
+            "type": "string",
+            "description": "The cluster id (RayCluster name)."
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ClusterEvent"
+            },
+            "description": "Normalized events, most-recent-first, capped (see the endpoint's cap)."
+          }
+        }
+      },
+      "ClusterLogs": {
+        "type": "object",
+        "description": "A tail-capped pod log view for one cluster (api-v1.md §5.6, non-streaming\nfirst cut) — the body of `GET /api/v1/clusters/{id}/logs`. WS streaming is\nthe eventual design (Milestone C); this GET-tail form removes the\npending-backend stub now.",
+        "required": [
+          "cluster_id",
+          "pods",
+          "pod",
+          "tail",
+          "lines",
+          "truncated"
+        ],
+        "properties": {
+          "cluster_id": {
+            "type": "string",
+            "description": "The cluster id (RayCluster name)."
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The most recent log lines (up to `tail`), oldest first."
+          },
+          "pod": {
+            "type": "string",
+            "description": "The pod these `lines` are from (the requested pod, or the head pod when\nnone was requested). Empty only when the cluster has no pods yet."
+          },
+          "pods": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Names of the cluster's pods the caller may tail (head first), so the UI\ncan offer a pod selector."
+          },
+          "tail": {
+            "type": "integer",
+            "format": "int32",
+            "description": "The tail line count that was requested.",
+            "minimum": 0
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "`true` when the tail was filled (there may be older lines beyond it)."
+          }
+        }
+      },
+      "ClusterMetrics": {
+        "type": "object",
+        "description": "Normalized cluster resource-usage summary (the body of\n`GET /api/v1/clusters/{id}/metrics`), distilled from the Ray dashboard's\nautoscaler / load-metrics report. Every stat is `Option` because a cluster\nmay not report GPUs, and an older/mismatched Ray may omit a field — the UI\nrenders a tile only for the stats present.",
+        "required": [
+          "cluster_id"
+        ],
+        "properties": {
+          "active_nodes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Active Ray nodes the autoscaler reports; `None` when unavailable.",
+            "minimum": 0
+          },
+          "cluster_id": {
+            "type": "string",
+            "description": "The cluster id (RayCluster name)."
+          },
+          "cpu": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceStat",
+                "description": "CPU cores used vs total across the Ray cluster."
+              }
+            ]
+          },
+          "failed_nodes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Nodes the autoscaler marked failed; `None` when unavailable.",
+            "minimum": 0
+          },
+          "gpu": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceStat",
+                "description": "GPU devices used vs total."
+              }
+            ]
+          },
+          "memory": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceStat",
+                "description": "Memory bytes used vs total."
+              }
+            ]
+          },
+          "object_store_memory": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceStat",
+                "description": "Object-store memory bytes used vs total."
+              }
+            ]
+          },
+          "pending_nodes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Nodes pending launch; `None` when unavailable.",
+            "minimum": 0
+          }
+        }
+      },
       "ClusterNodes": {
         "type": "object",
         "description": "Head + per-worker-group node breakdown for one cluster (api-v1.md §5.3),\nthe body of `GET /api/v1/clusters/{id}/nodes`.",
@@ -3293,6 +3620,24 @@
           },
           "ok": {
             "type": "boolean"
+          }
+        }
+      },
+      "ResourceStat": {
+        "type": "object",
+        "description": "A single resource's used-vs-total pair. `used`/`total` are in the\nresource's natural unit: CPU in cores, GPU in device count, memory in\nbytes.",
+        "required": [
+          "used",
+          "total"
+        ],
+        "properties": {
+          "total": {
+            "type": "number",
+            "format": "double"
+          },
+          "used": {
+            "type": "number",
+            "format": "double"
           }
         }
       },

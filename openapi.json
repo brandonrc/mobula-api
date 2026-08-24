@@ -3625,9 +3625,8 @@
       },
       "ResourceStat": {
         "type": "object",
-        "description": "A single resource's used-vs-total pair. `used`/`total` are in the\nresource's natural unit: CPU in cores, GPU in device count, memory in\nbytes.",
+        "description": "A single resource's capacity, and its used amount when known. `used`/\n`total` are in the resource's natural unit: CPU in cores, GPU in device\ncount, memory in bytes. `used` is `None` when the cluster does not report\nlive utilization (e.g. a non-autoscaling cluster whose Ray dashboard has\nno load-metrics report) — the tile then shows capacity only.",
         "required": [
-          "used",
           "total"
         ],
         "properties": {
@@ -3636,7 +3635,10 @@
             "format": "double"
           },
           "used": {
-            "type": "number",
+            "type": [
+              "number",
+              "null"
+            ],
             "format": "double"
           }
         }

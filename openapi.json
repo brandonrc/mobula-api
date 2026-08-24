@@ -2349,6 +2349,13 @@
           "name": {
             "type": "string"
           },
+          "owner": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The authenticated owner of this cluster (tier-2 owned session\nclusters): the human identity that requested it — a\n`preferred_username` when the OIDC token carries one, else the `sub`.\nSet control-plane-side from the request identity (never trusted from\nthe client body); `None` for clusters created without an owner (e.g.\nadmin/service paths). When set it is stamped as the\n`mobula.dev/owner` label on the RayCluster and its pods, and drives\nthe per-owner Ray-client (`:10001`) ingress NetworkPolicy so only the\nowner's notebook pod can reach the cluster. `#[serde(default)]` keeps\nspecs persisted before this field deserializable (they parse as\n`None`)."
+          },
           "project": {
             "type": "string"
           },

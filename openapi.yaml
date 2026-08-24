@@ -616,6 +616,37 @@ paths:
           description: No such cluster
       security:
       - bearer: []
+  /api/v1/clusters/{id}/jobs:
+    get:
+      tags:
+      - clusters
+      operationId: cluster_jobs
+      parameters:
+      - name: id
+        in: path
+        description: Cluster id
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Normalized list of Ray jobs on the cluster
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RayJobSummary'
+        '401':
+          description: No/invalid token
+        '403':
+          description: Missing Read on job
+        '404':
+          description: No such cluster, or no reachable Ray endpoint for it
+        '503':
+          description: The cluster's Ray Job API could not be reached
+      security:
+      - bearer: []
   /api/v1/clusters/{id}/metrics:
     get:
       tags:
@@ -645,6 +676,35 @@ paths:
         '502':
           description: The Ray head could not be reached or its response exceeded
             the 4MiB cap
+      security:
+      - bearer: []
+  /api/v1/clusters/{id}/nodes:
+    get:
+      tags:
+      - clusters
+      operationId: cluster_nodes
+      parameters:
+      - name: id
+        in: path
+        description: Cluster id
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Head + per-worker-group node breakdown, sourced from Kubernetes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClusterNodes'
+        '401':
+          description: No/invalid token
+        '403':
+          description: Missing Read on cluster
+        '404':
+          description: No such cluster, or the backend exposes no node breakdown
+        '503':
+          description: The node source (Kubernetes) could not be reached
       security:
       - bearer: []
   /api/v1/clusters/{id}/resume:
@@ -1468,6 +1528,28 @@ components:
         ok:
           type: boolean
           description: True when every row in the window matched the replayed chain.
+    ClusterNodes:
+      type: object
+      description: "Head + per-worker-group node breakdown for one cluster (api-v1.md\
+        \ \xA75.3),\nthe body of `GET /api/v1/clusters/{id}/nodes`."
+      required:
+      - cluster_id
+      - worker_groups
+      properties:
+        cluster_id:
+          type: string
+          description: The cluster id (RayCluster name).
+        head:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/NodeView'
+            description: The head node; `None` if KubeRay has not created the head
+              pod yet.
+        worker_groups:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkerGroupNodes'
+          description: One entry per worker group, in the RayCluster spec's order.
     ClusterSpec:
       type: object
       description: 'Declarative spec for a managed Ray cluster.
@@ -1849,6 +1931,82 @@ components:
           type: string
           description: Always "bearer".
           example: bearer
+    NodeView:
+      type: object
+      description: 'A single Ray node (head or one worker) as Kubernetes sees it:
+        the pod
+
+        KubeRay created for it, its scheduling/readiness, and the compute it
+
+        requests. Fields are `Option` because a pod may not yet be scheduled
+
+        (no IP/host) and a quantity may be unparseable or unset.'
+      required:
+      - pod_name
+      - is_head
+      - phase
+      - ready
+      properties:
+        cpu:
+          type:
+          - number
+          - 'null'
+          format: double
+          description: "CPU cores requested, summed across the pod's containers and\
+            \ parsed\nfrom the K8s quantity (`500m` \u2192 0.5). `None` when unset/unparseable."
+        gpu:
+          type:
+          - number
+          - 'null'
+          format: double
+          description: 'GPUs requested (`nvidia.com/gpu`), summed across containers.
+            `None`
+
+            when the pod requests no GPU.'
+        group:
+          type:
+          - string
+          - 'null'
+          description: Worker-group name (`ray.io/group`); `None` for the head node.
+        host:
+          type:
+          - string
+          - 'null'
+          description: 'Kubernetes node the pod landed on (`spec.nodeName`); `None`
+            before
+
+            scheduling.'
+        is_head:
+          type: boolean
+          description: Whether this is the cluster's head node.
+        memory_bytes:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          description: "Memory bytes requested, summed across the pod's containers\
+            \ (`2Gi` \u2192\n2147483648). `None` when unset/unparseable."
+          minimum: 0
+        node_ip:
+          type:
+          - string
+          - 'null'
+          description: Pod IP once scheduled (`status.podIP`); `None` before scheduling.
+        phase:
+          type: string
+          description: 'Kubernetes pod phase: `Pending` | `Running` | `Succeeded`
+            | `Failed` |
+
+            `Unknown` (verbatim from `status.phase`).'
+        pod_name:
+          type: string
+          description: The pod's name (`metadata.name`).
+        ready:
+          type: boolean
+          description: 'Whether the pod''s `Ready` condition is true. Distinct from
+            `phase`: a
+
+            pod can be `Running` but not yet `Ready`.'
     OidcProviderInfo:
       type: object
       required:
@@ -2094,6 +2252,48 @@ components:
           - string
           - 'null'
         project:
+          type:
+          - string
+          - 'null'
+    RayJobSummary:
+      type: object
+      description: "A Ray job normalized to a stable Mobula shape (api-v1.md \xA7\
+        5.6). Every\nfield is optional: Ray's own records vary by version and by whether\
+        \ the\njob has started/finished. `status` is Ray's vocabulary verbatim\n(`PENDING\
+        \ | RUNNING | SUCCEEDED | FAILED | STOPPED`) \u2014 not snake_cased,\nper\
+        \ \xA75.7. `start_time`/`end_time` are Ray's unix-millis timestamps."
+      properties:
+        end_time:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          description: Ray's `end_time` (unix millis); `None` while the job runs.
+          minimum: 0
+        entrypoint:
+          type:
+          - string
+          - 'null'
+        job_id:
+          type:
+          - string
+          - 'null'
+        message:
+          type:
+          - string
+          - 'null'
+        start_time:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          description: Ray's `start_time` (unix millis); `None` before the job starts.
+          minimum: 0
+        status:
+          type:
+          - string
+          - 'null'
+        submission_id:
           type:
           - string
           - 'null'
@@ -2469,6 +2669,39 @@ components:
         replicas:
           type: integer
           format: int32
+          minimum: 0
+    WorkerGroupNodes:
+      type: object
+      description: "One worker group and its nodes (api-v1.md \xA75.3)."
+      required:
+      - name
+      - desired
+      - ready
+      - nodes
+      properties:
+        desired:
+          type: integer
+          format: int32
+          description: 'Desired replicas: the group''s `replicas` field, or `minReplicas`
+            when
+
+            autoscaling leaves `replicas` unmanaged (ADR-0007). Per-group desired
+
+            counts are not in the RayCluster status, so this is the spec''s answer.'
+          minimum: 0
+        name:
+          type: string
+          description: The worker-group name (`groupName` in the RayCluster spec).
+        nodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/NodeView'
+          description: The group's nodes.
+        ready:
+          type: integer
+          format: int32
+          description: 'Ready replicas: pods in this group that are `Running` and
+            `Ready`.'
           minimum: 0
   securitySchemes:
     bearer:

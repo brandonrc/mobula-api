@@ -58,7 +58,7 @@
           {
             "name": "principal",
             "in": "path",
-            "description": "The Identity subject to bind",
+            "description": "The principal to bind: a token `sub` (Keycloak UUID) or a `preferred_username` — both are matched at evaluation (#88)",
             "required": true,
             "schema": {
               "type": "string"
@@ -2240,7 +2240,7 @@
           },
           "principal": {
             "type": "string",
-            "description": "The Identity `subject` the assignment applies to."
+            "description": "The principal the assignment applies to: a token `sub` (opaque\nKeycloak UUID) or a `preferred_username` — evaluation matches BOTH, so\nhuman-friendly username grants take effect (#88)."
           },
           "role": {
             "type": "string",

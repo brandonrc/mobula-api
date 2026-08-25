@@ -1800,12 +1800,20 @@ components:
           description: One entry per worker group, in the RayCluster spec's order.
     ClusterSpec:
       type: object
-      description: 'Declarative spec for a managed Ray cluster.
+      description: 'Declarative spec for a managed cluster.
 
 
-        v0 targets the KubeRay backend only; fields deliberately mirror what maps
+        Historically Ray-only (fields mirror a RayCluster CR so the KubeRay
 
-        onto a RayCluster CR so the provisioner stays a thin translation.'
+        provisioner stays a thin translation). Multi-engine adds [`Self::engine`];
+
+        the head/scheduler + worker-group shape is generic to both engines. For
+
+        `engine = dask`, `ray_version` is unused (Dask''s version is carried by
+
+        [`Self::image`]); it stays a required field only for back-compat with
+
+        stored Ray specs and existing clients.'
       required:
       - name
       - project
@@ -1815,6 +1823,14 @@ components:
       - head_memory
       - worker_groups
       properties:
+        engine:
+          $ref: '#/components/schemas/Engine'
+          description: 'Which compute engine backs this cluster. `#[serde(default)]`
+            = Ray, so
+
+            every pre-multi-engine spec and every Ray client keeps working
+
+            untouched.'
         head_cpu:
           type: string
         head_memory:
@@ -1877,6 +1893,7 @@ components:
       - desired
       - observed_generation
       - project
+      - engine
       - ray_version
       properties:
         condition:
@@ -1893,6 +1910,12 @@ components:
           type: string
           description: "\"running\" | \"suspended\" | \"terminated\" \u2014 the operator's\
             \ intent."
+        engine:
+          type: string
+          description: 'Which engine backs this cluster: "ray" | "dask" (multi-engine).
+            Lets
+
+            GET /clusters surface a Ray and a Dask cluster side by side.'
         est_max_hourly:
           type:
           - number
@@ -2013,6 +2036,17 @@ components:
           description: Stable service name (the RayService name).
         spec:
           $ref: '#/components/schemas/ServiceSpec'
+    Engine:
+      type: string
+      description: "The compute engine a cluster is provisioned on (multi-engine spike).\
+        \ The\ncontrol plane is engine-neutral above the provisioner seam; this\n\
+        discriminator is what the reconciler and the provisioner router dispatch\n\
+        on. `Ray` is the default so specs persisted before multi-engine \u2014 and\
+        \ any\nclient that omits the field \u2014 still deserialize as Ray clusters,\
+        \ exactly\nas before."
+      enum:
+      - ray
+      - dask
     FlavorSpec:
       type: object
       description: 'A hardware flavor within a pool: node selection plus per-resource

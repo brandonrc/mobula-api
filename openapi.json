@@ -2668,7 +2668,7 @@
       },
       "ClusterSpec": {
         "type": "object",
-        "description": "Declarative spec for a managed Ray cluster.\n\nv0 targets the KubeRay backend only; fields deliberately mirror what maps\nonto a RayCluster CR so the provisioner stays a thin translation.",
+        "description": "Declarative spec for a managed cluster.\n\nHistorically Ray-only (fields mirror a RayCluster CR so the KubeRay\nprovisioner stays a thin translation). Multi-engine adds [`Self::engine`];\nthe head/scheduler + worker-group shape is generic to both engines. For\n`engine = dask`, `ray_version` is unused (Dask's version is carried by\n[`Self::image`]); it stays a required field only for back-compat with\nstored Ray specs and existing clients.",
         "required": [
           "name",
           "project",
@@ -2679,6 +2679,10 @@
           "worker_groups"
         ],
         "properties": {
+          "engine": {
+            "$ref": "#/components/schemas/Engine",
+            "description": "Which compute engine backs this cluster. `#[serde(default)]` = Ray, so\nevery pre-multi-engine spec and every Ray client keeps working\nuntouched."
+          },
           "head_cpu": {
             "type": "string"
           },
@@ -2745,6 +2749,7 @@
           "desired",
           "observed_generation",
           "project",
+          "engine",
           "ray_version"
         ],
         "properties": {
@@ -2758,6 +2763,10 @@
           "desired": {
             "type": "string",
             "description": "\"running\" | \"suspended\" | \"terminated\" — the operator's intent."
+          },
+          "engine": {
+            "type": "string",
+            "description": "Which engine backs this cluster: \"ray\" | \"dask\" (multi-engine). Lets\nGET /clusters surface a Ray and a Dask cluster side by side."
           },
           "est_max_hourly": {
             "type": [
@@ -2918,6 +2927,14 @@
             "$ref": "#/components/schemas/ServiceSpec"
           }
         }
+      },
+      "Engine": {
+        "type": "string",
+        "description": "The compute engine a cluster is provisioned on (multi-engine spike). The\ncontrol plane is engine-neutral above the provisioner seam; this\ndiscriminator is what the reconciler and the provisioner router dispatch\non. `Ray` is the default so specs persisted before multi-engine — and any\nclient that omits the field — still deserialize as Ray clusters, exactly\nas before.",
+        "enum": [
+          "ray",
+          "dask"
+        ]
       },
       "FlavorSpec": {
         "type": "object",

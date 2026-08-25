@@ -2689,6 +2689,15 @@
           "head_memory": {
             "type": "string"
           },
+          "idle_timeout_secs": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "**Inactivity reap window** in seconds (#100): the cluster is reaped once\nit has been *idle* — no job activity — for this long, so a busy cluster\nsurvives past it while a genuinely unused one is released. Distinct from\n[`Self::ttl_seconds`], which still caps absolute age independently:\nwhichever fires first reaps the cluster.\n\nActivity is derived from the persisted job history (a running/recent\ngateway job keeps the cluster alive). **Limitation:** interactive Ray\nClient / Dask sessions submit no gateway jobs, so their activity is\ninvisible to this signal — an interactive-only cluster looks idle from\ncreation. For such sessions rely on [`Self::ttl_seconds`] or leave this\nunset. See `reconcile.rs` module docs.\n\n`#[serde(default)]` so specs persisted before this field — and any\nclient that omits it — keep the prior max-age-only behavior.",
+            "minimum": 0
+          },
           "image": {
             "type": "string"
           },
@@ -2714,7 +2723,7 @@
               "null"
             ],
             "format": "int64",
-            "description": "Idle TTL in seconds; `None` disables reaping.",
+            "description": "**Absolute max-age cap** in seconds: the cluster is reaped this long\nafter creation regardless of activity. `None` disables the max-age\nreaper. (Despite the historical name, this is a wall-clock age cap, not\nan inactivity window — see [`Self::idle_timeout_secs`] for that.)",
             "minimum": 0
           },
           "worker_groups": {

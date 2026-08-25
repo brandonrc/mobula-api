@@ -1617,6 +1617,73 @@ components:
         ok:
           type: boolean
           description: True when every row in the window matched the replayed chain.
+    BudgetStatus:
+      type: object
+      description: "A configured project's time-windowed budget status (#77): the\
+        \ cap, what\nhas been consumed over the trailing window (ending at the report's\
+        \ `to`),\nand what remains. Distinct from `UsageGroup` \u2014 this reflects\
+        \ the\n`[budgets]` policy, not the raw sample roll-up."
+      required:
+      - project
+      - window_secs
+      - limit
+      - consumed
+      - remaining
+      - exhausted
+      properties:
+        consumed:
+          type: object
+          description: "resource \u2192 resource-hours consumed over the trailing\
+            \ window."
+          additionalProperties:
+            type: number
+            format: double
+          propertyNames:
+            type: string
+        exhausted:
+          type: boolean
+          description: "True once consumption has reached or passed the cap on any\
+            \ capped\nresource \u2014 a create for this project would be 409'd."
+        limit:
+          type: object
+          description: "resource \u2192 resource-hours allowed over the window."
+          additionalProperties:
+            type: number
+            format: double
+          propertyNames:
+            type: string
+        project:
+          type: string
+        remaining:
+          type: object
+          description: "resource \u2192 resource-hours remaining (`limit \u2212 consumed`,\
+            \ floored at 0)\nfor each capped resource."
+          additionalProperties:
+            type: number
+            format: double
+          propertyNames:
+            type: string
+        window_secs:
+          type: integer
+          format: int64
+          description: Trailing window length in seconds.
+          minimum: 0
+    BudgetView:
+      type: object
+      description: A configured budget as reported by the settings API.
+      required:
+      - window_secs
+      properties:
+        window_secs:
+          type: integer
+          format: int64
+          description: Trailing window length in seconds (e.g. 604800 = 7 days).
+          minimum: 0
+      additionalProperties:
+        type: number
+        format: double
+        description: "resource \u2192 resource-hours allowed over the window (`cpu`\
+          \ = core-hours,\n`memory` = GiB-hours, `nvidia.com/gpu` = GPU-hours)."
     ClusterEvent:
       type: object
       description: "One normalized Kubernetes Event about a cluster object (api-v1.md\
@@ -2344,9 +2411,18 @@ components:
         provenance.'
       required:
       - quotas
+      - budgets
       - source
       - editable
       properties:
+        budgets:
+          type: object
+          description: "project \u2192 time-windowed compute budget (#77). Empty when\
+            \ none are\nconfigured."
+          additionalProperties:
+            $ref: '#/components/schemas/BudgetView'
+          propertyNames:
+            type: string
         editable:
           type: boolean
           description: "Always true in v1 \u2014 the policy is editable via PUT."
@@ -2854,6 +2930,16 @@ components:
 
         leaves that section untouched.'
       properties:
+        budgets:
+          type:
+          - object
+          - 'null'
+          description: Present replaces the whole budget map (`{}` clears all budgets)
+            (#77).
+          additionalProperties:
+            $ref: '#/components/schemas/BudgetView'
+          propertyNames:
+            type: string
         prices:
           type:
           - object
@@ -2948,7 +3034,18 @@ components:
       - from
       - to
       - groups
+      - budgets
       properties:
+        budgets:
+          type: array
+          items:
+            $ref: '#/components/schemas/BudgetStatus'
+          description: 'Time-windowed budget status per configured project (#77).
+            Empty when
+
+            no `[budgets]` are configured. When the report is filtered to one
+
+            `project`, only that project''s budget appears.'
         from:
           type: integer
           format: int64
